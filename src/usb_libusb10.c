@@ -51,14 +51,17 @@ int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 	}
 }
 
-int fnusb_shutdown(fnusb_ctx *ctx)
+/** \brief Deinitialize libusb. */
+int 
+  fnusb_shutdown (fnusb_ctx *ctx)
 {
 	//int res;
-	if (ctx->should_free_ctx) {
+	if (ctx->should_free_ctx)
+  {
 		libusb_exit(ctx->ctx);
 		ctx->ctx = NULL;
 	}
-	return 0;
+	return (0);
 }
 
 int fnusb_process_events(fnusb_ctx *ctx)
@@ -66,13 +69,12 @@ int fnusb_process_events(fnusb_ctx *ctx)
 	return libusb_handle_events(ctx->ctx);
 }
 
-int fnusb_open_subdevices(freenect_device *dev, int index)
+/** \brief Open a camera/motor device using an user given index. */
+int 
+  fnusb_open_subdevices (freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
 	dev->usb_motor.parent = dev;
-
-	// Search for 0x45e (Microsoft Corp.) and 0x02ae
-	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
 
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -113,7 +115,6 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 			// If the index given by the user matches our camera index
 			if (nr_mot == index)
 			{
-				//libusb_open_device_with_vid_pid (dev->parent->usb.ctx, MS_MAGIC_VENDOR, MS_MAGIC_MOTOR_PRODUCT);
 				if (libusb_open (devs[i], &dev->usb_motor.dev) != 0)
 					return (-1);
 				// Claim the motor
