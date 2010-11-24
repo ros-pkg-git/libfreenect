@@ -44,10 +44,12 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
-int freenect_shutdown(freenect_context *ctx)
+/** \brief Shutdown the given Freenect context. */
+int 
+  freenect_shutdown(freenect_context *ctx)
 {
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
-	return 0;
+  fnusb_shutdown (ctx);
+	return (0);
 }
 
 int freenect_process_events(freenect_context *ctx)
