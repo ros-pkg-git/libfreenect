@@ -31,14 +31,15 @@
 
 #include "libfreenect.h"
 
-typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
+typedef void (*fnusb_iso_cb) (freenect_device * dev, uint8_t * buf, int len);
 
 #include "usb_libusb10.h"
 
-struct _freenect_context {
-	freenect_loglevel log_level;
-	freenect_log_cb log_cb;
-	fnusb_ctx usb;
+struct _freenect_context
+{
+  freenect_loglevel log_level;
+  freenect_log_cb log_cb;
+  fnusb_ctx usb;
 };
 
 #define LL_FATAL FREENECT_LOG_FATAL
@@ -50,7 +51,8 @@ struct _freenect_context {
 #define LL_SPEW FREENECT_LOG_SPEW
 #define LL_FLOOD FREENECT_LOG_FLOOD
 
-void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
+void fn_log (freenect_context * ctx, freenect_loglevel level, const char *fmt, ...)
+  __attribute__ ((format (printf, 3, 4)));
 
 #define FN_LOG(level, ...) fn_log(ctx, level, __VA_ARGS__)
 
@@ -67,7 +69,9 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define DEPTH_RAW_11_BIT_SIZE 422400
 #define FRAME_H FREENECT_FRAME_H
 #define FRAME_W FREENECT_FRAME_W
-#define FRAME_PIX FREENECT_FRAME_PIX
+#define FRAME_PIX_DEPTH FREENECT_FRAME_PIX
+#define FRAME_PIX_RGB  FREENECT_FRAME_PIX
+#define FRAME_PIX_IR   (DEPTH_RAW_10_BIT_SIZE + RGB_PKTSIZE*3)
 
 #define DEPTH_PKTSIZE 1760
 #define RGB_PKTSIZE 1920
@@ -77,67 +81,76 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 
 #define DEPTH_PKTS_10_BIT_PER_FRAME ((DEPTH_RAW_10_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define DEPTH_PKTS_11_BIT_PER_FRAME ((DEPTH_RAW_11_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
+#define RGB_PKTS_PER_FRAME_RGB ((FRAME_PIX_RGB+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
+#define RGB_PKTS_PER_FRAME_IR  ((FRAME_PIX_IR+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
 #define MS_MAGIC_VENDOR 0x45e
 #define MS_MAGIC_CAMERA_PRODUCT 0x02ae
 #define MS_MAGIC_MOTOR_PRODUCT 0x02b0
 
-typedef struct {
-	uint8_t flag;
-	int synced;
-	uint8_t seq;
-	int got_pkts;
-	int pkt_num;
-	int pkts_per_frame;
-	int pkt_size;
-	int valid_pkts;
-	int valid_frames;
-	uint32_t last_timestamp;
-	uint32_t timestamp;
-	uint8_t *buf;
+typedef struct
+{
+  uint8_t flag;
+  int synced;
+  uint8_t seq;
+  int got_pkts;
+  int pkt_num;
+  int pkts_per_frame;
+  int pkt_size;
+  int valid_pkts;
+  int valid_frames;
+  uint32_t last_timestamp;
+  uint32_t timestamp;
+  uint8_t *buf;
 } packet_stream;
 
-struct _freenect_device {
-	freenect_context *parent;
-	void *user_data;
+struct _freenect_device
+{
+  freenect_context *parent;
+  void *user_data;
 
-	// Cameras
-	fnusb_dev usb_cam;
-	fnusb_isoc_stream depth_isoc;
-	fnusb_isoc_stream rgb_isoc;
+  // Cameras
+  fnusb_dev usb_cam;
+  fnusb_isoc_stream depth_isoc;
+  fnusb_isoc_stream rgb_isoc;
 
-	freenect_depth_cb depth_cb;
-	freenect_rgb_cb rgb_cb;
-	freenect_rgb_format rgb_format;
-	freenect_depth_format depth_format;
+  freenect_depth_cb depth_cb;
+  freenect_rgb_cb rgb_cb;
+  freenect_ir_cb ir_cb;
+  freenect_rgb_format rgb_format;
+  freenect_depth_format depth_format;
 
-	int cam_inited;
-	uint16_t cam_tag;
+  int cam_inited;
+  uint16_t cam_tag;
 
-	int depth_running;
-	packet_stream depth_stream;
-	uint8_t depth_raw[DEPTH_RAW_11_BIT_SIZE];
-	uint16_t depth_frame[FRAME_PIX];
+  int depth_running;
+  packet_stream depth_stream;
+  uint8_t depth_raw[DEPTH_RAW_11_BIT_SIZE];
+  uint16_t depth_frame[FRAME_PIX_DEPTH];
 
-	int rgb_running;
-	packet_stream rgb_stream;
-	uint8_t rgb_raw[FRAME_PIX];
-	uint8_t rgb_frame[3*FRAME_PIX];
+  int rgb_running;
+  packet_stream rgb_stream;
+  uint8_t rgb_raw[FRAME_PIX_RGB];
+  uint8_t rgb_frame[3 * FRAME_PIX_RGB];
 
-	// Audio
-	// Motor
-	fnusb_dev usb_motor;
-	freenect_raw_device_state raw_state;
+  int ir_running;
+  uint8_t ir_raw[FRAME_PIX_IR];
+  uint8_t ir_frame[3 * FRAME_PIX_IR];
+
+  // Audio
+  // Motor
+  fnusb_dev usb_motor;
+  freenect_raw_device_state raw_state;
 };
 
-struct caminit {
-	uint16_t command;
-	uint16_t tag;
-	int cmdlen;
-	int replylen;
-	uint8_t cmddata[1024];
-	uint8_t replydata[1024];
+struct caminit
+{
+  uint16_t command;
+  uint16_t tag;
+  int cmdlen;
+  int replylen;
+  uint8_t cmddata[1024];
+  uint8_t replydata[1024];
 };
 
 #endif

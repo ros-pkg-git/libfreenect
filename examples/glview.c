@@ -50,14 +50,15 @@ int g_argc;
 char **g_argv;
 
 int window;
+int ir_mode = 0;
 
 pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-uint8_t gl_depth_front[640*480*4];
-uint8_t gl_depth_back[640*480*4];
+uint8_t gl_depth_front[640 * 480 * 4];
+uint8_t gl_depth_back[640 * 480 * 4];
 
-uint8_t gl_rgb_front[640*480*4];
-uint8_t gl_rgb_back[640*480*4];
+uint8_t gl_rgb_front[640 * 480 * 4];
+uint8_t gl_rgb_back[640 * 480 * 4];
 
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
@@ -71,292 +72,369 @@ int freenect_led;
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_frames = 0;
 
-void DrawGLScene()
+void
+DrawGLScene ()
 {
-	pthread_mutex_lock(&gl_backbuf_mutex);
+  pthread_mutex_lock (&gl_backbuf_mutex);
 
-	while (got_frames < 2) {
-		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
-	}
+  while (got_frames < 2)
+  {
+    pthread_cond_wait (&gl_frame_cond, &gl_backbuf_mutex);
+  }
 
-	memcpy(gl_depth_front, gl_depth_back, sizeof(gl_depth_back));
-	memcpy(gl_rgb_front, gl_rgb_back, sizeof(gl_rgb_back));
-	got_frames = 0;
-	pthread_mutex_unlock(&gl_backbuf_mutex);
+  memcpy (gl_depth_front, gl_depth_back, sizeof (gl_depth_back));
+  memcpy (gl_rgb_front, gl_rgb_back, sizeof (gl_rgb_back));
+  got_frames = 0;
+  pthread_mutex_unlock (&gl_backbuf_mutex);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity();
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glLoadIdentity ();
 
-	glEnable(GL_TEXTURE_2D);
+  glEnable (GL_TEXTURE_2D);
 
-	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_depth_front);
+  glBindTexture (GL_TEXTURE_2D, gl_depth_tex);
+  glTexImage2D (GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_depth_front);
 
-	glBegin(GL_TRIANGLE_FAN);
-	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(0,0,0);
-	glTexCoord2f(1, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 1); glVertex3f(640,480,0);
-	glTexCoord2f(0, 1); glVertex3f(0,480,0);
-	glEnd();
+  glBegin (GL_TRIANGLE_FAN);
+  glColor4f (255.0f, 255.0f, 255.0f, 255.0f);
+  glTexCoord2f (0, 0);
+  glVertex3f (0, 0, 0);
+  glTexCoord2f (1, 0);
+  glVertex3f (640, 0, 0);
+  glTexCoord2f (1, 1);
+  glVertex3f (640, 480, 0);
+  glTexCoord2f (0, 1);
+  glVertex3f (0, 480, 0);
+  glEnd ();
 
-	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_rgb_front);
+  glBindTexture (GL_TEXTURE_2D, gl_rgb_tex);
+  glTexImage2D (GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_rgb_front);
 
-	glBegin(GL_TRIANGLE_FAN);
-	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(640,480,0);
-	glEnd();
+  glBegin (GL_TRIANGLE_FAN);
+  glColor4f (255.0f, 255.0f, 255.0f, 255.0f);
+  glTexCoord2f (0, 0);
+  glVertex3f (640, 0, 0);
+  glTexCoord2f (1, 0);
+  glVertex3f (1280, 0, 0);
+  glTexCoord2f (1, 1);
+  glVertex3f (1280, 480, 0);
+  glTexCoord2f (0, 1);
+  glVertex3f (640, 480, 0);
+  glEnd ();
 
-	glutSwapBuffers();
+  glutSwapBuffers ();
 }
 
-void keyPressed(unsigned char key, int x, int y)
+void
+keyPressed (unsigned char key, int x, int y)
 {
-	if (key == 27) {
-		die = 1;
-		pthread_join(freenect_thread, NULL);
-		glutDestroyWindow(window);
-		pthread_exit(NULL);
-	}
-	if (key == 'w') {
-		freenect_angle++;
-		if (freenect_angle > 30) {
-			freenect_angle = 30;
-		}
-	}
-	if (key == 's') {
-		freenect_angle = 0;
-	}
-	if (key == 'x') {
-		freenect_angle--;
-		if (freenect_angle < -30) {
-			freenect_angle = -30;
-		}
-	}
-	if (key == '1') {
-		freenect_set_led(f_dev,LED_GREEN);
-	}
-	if (key == '2') {
-		freenect_set_led(f_dev,LED_RED);
-	}
-	if (key == '3') {
-		freenect_set_led(f_dev,LED_YELLOW);
-	}
-	if (key == '4') {
-		freenect_set_led(f_dev,LED_BLINK_YELLOW);
-	}
-	if (key == '5') {
-		freenect_set_led(f_dev,LED_BLINK_GREEN);
-	}
-	if (key == '6') {
-		freenect_set_led(f_dev,LED_BLINK_RED_YELLOW);
-	}
-	if (key == '0') {
-		freenect_set_led(f_dev,LED_OFF);
-	}
-	freenect_set_tilt_degs(f_dev,freenect_angle);
+  if (key == 27)
+  {
+    die = 1;
+    pthread_join (freenect_thread, NULL);
+    glutDestroyWindow (window);
+    pthread_exit (NULL);
+  }
+  if (key == 'w')
+  {
+    freenect_angle++;
+    if (freenect_angle > 30)
+    {
+      freenect_angle = 30;
+    }
+  }
+  if (key == 's')
+  {
+    freenect_angle = 0;
+  }
+  if (key == 'x')
+  {
+    freenect_angle--;
+    if (freenect_angle < -30)
+    {
+      freenect_angle = -30;
+    }
+  }
+  // Toggle the IR mode on/off
+  if (key == 'i')
+  {
+    if (ir_mode)
+    {
+      freenect_set_rgb_format (f_dev, FREENECT_FORMAT_RGB);
+      freenect_start_rgb (f_dev);
+    }
+    else
+    {
+      freenect_set_rgb_format (f_dev, FREENECT_FORMAT_IR);
+      freenect_start_ir (f_dev);
+    }
+    ir_mode = !ir_mode;
+  }
+  if (key == '1')
+  {
+    freenect_set_led (f_dev, LED_GREEN);
+  }
+  if (key == '2')
+  {
+    freenect_set_led (f_dev, LED_RED);
+  }
+  if (key == '3')
+  {
+    freenect_set_led (f_dev, LED_YELLOW);
+  }
+  if (key == '4')
+  {
+    freenect_set_led (f_dev, LED_BLINK_YELLOW);
+  }
+  if (key == '5')
+  {
+    freenect_set_led (f_dev, LED_BLINK_GREEN);
+  }
+  if (key == '6')
+  {
+    freenect_set_led (f_dev, LED_BLINK_RED_YELLOW);
+  }
+  if (key == '0')
+  {
+    freenect_set_led (f_dev, LED_OFF);
+  }
+  freenect_set_tilt_degs (f_dev, freenect_angle);
 }
 
-void ReSizeGLScene(int Width, int Height)
+void
+ReSizeGLScene (int Width, int Height)
 {
-	glViewport(0,0,Width,Height);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho (0, 1280, 480, 0, -1.0f, 1.0f);
-	glMatrixMode(GL_MODELVIEW);
+  glViewport (0, 0, Width, Height);
+  glMatrixMode (GL_PROJECTION);
+  glLoadIdentity ();
+  glOrtho (0, 1280, 480, 0, -1.0f, 1.0f);
+  glMatrixMode (GL_MODELVIEW);
 }
 
-void InitGL(int Width, int Height)
+void
+InitGL (int Width, int Height)
 {
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClearDepth(1.0);
-	glDepthFunc(GL_LESS);
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glShadeModel(GL_SMOOTH);
-	glGenTextures(1, &gl_depth_tex);
-	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glGenTextures(1, &gl_rgb_tex);
-	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	ReSizeGLScene(Width, Height);
+  glClearColor (0.0f, 0.0f, 0.0f, 0.0f);
+  glClearDepth (1.0);
+  glDepthFunc (GL_LESS);
+  glDisable (GL_DEPTH_TEST);
+  glEnable (GL_BLEND);
+  glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glShadeModel (GL_SMOOTH);
+  glGenTextures (1, &gl_depth_tex);
+  glBindTexture (GL_TEXTURE_2D, gl_depth_tex);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glGenTextures (1, &gl_rgb_tex);
+  glBindTexture (GL_TEXTURE_2D, gl_rgb_tex);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  ReSizeGLScene (Width, Height);
 }
 
-void *gl_threadfunc(void *arg)
+void *
+gl_threadfunc (void *arg)
 {
-	printf("GL thread\n");
+  printf ("GL thread\n");
 
-	glutInit(&g_argc, g_argv);
+  glutInit (&g_argc, g_argv);
 
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
-	glutInitWindowSize(1280, 480);
-	glutInitWindowPosition(0, 0);
+  glutInitDisplayMode (GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
+  glutInitWindowSize (1280, 480);
+  glutInitWindowPosition (0, 0);
 
-	window = glutCreateWindow("LibFreenect");
+  window = glutCreateWindow ("Kinect Viewer Demo");
 
-	glutDisplayFunc(&DrawGLScene);
-	glutIdleFunc(&DrawGLScene);
-	glutReshapeFunc(&ReSizeGLScene);
-	glutKeyboardFunc(&keyPressed);
+  glutDisplayFunc (&DrawGLScene);
+  glutIdleFunc (&DrawGLScene);
+  glutReshapeFunc (&ReSizeGLScene);
+  glutKeyboardFunc (&keyPressed);
 
-	InitGL(1280, 480);
+  InitGL (1280, 480);
 
-	glutMainLoop();
+  glutMainLoop ();
 
-	return NULL;
+  return NULL;
 }
 
 uint16_t t_gamma[2048];
 
-void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
+void
+depth_cb (freenect_device * dev, void *v_depth, uint32_t timestamp)
 {
-	int i;
-	freenect_depth *depth = v_depth;
+  int i;
+  freenect_depth *depth = v_depth;
 
-	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<FREENECT_FRAME_PIX; i++) {
-		int pval = t_gamma[depth[i]];
-		int lb = pval & 0xff;
-		switch (pval>>8) {
-			case 0:
-				gl_depth_back[3*i+0] = 255;
-				gl_depth_back[3*i+1] = 255-lb;
-				gl_depth_back[3*i+2] = 255-lb;
-				break;
-			case 1:
-				gl_depth_back[3*i+0] = 255;
-				gl_depth_back[3*i+1] = lb;
-				gl_depth_back[3*i+2] = 0;
-				break;
-			case 2:
-				gl_depth_back[3*i+0] = 255-lb;
-				gl_depth_back[3*i+1] = 255;
-				gl_depth_back[3*i+2] = 0;
-				break;
-			case 3:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 255;
-				gl_depth_back[3*i+2] = lb;
-				break;
-			case 4:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 255-lb;
-				gl_depth_back[3*i+2] = 255;
-				break;
-			case 5:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 0;
-				gl_depth_back[3*i+2] = 255-lb;
-				break;
-			default:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 0;
-				gl_depth_back[3*i+2] = 0;
-				break;
-		}
-	}
-	got_frames++;
-	pthread_cond_signal(&gl_frame_cond);
-	pthread_mutex_unlock(&gl_backbuf_mutex);
+  pthread_mutex_lock (&gl_backbuf_mutex);
+  for (i = 0; i < FREENECT_FRAME_PIX; i++)
+  {
+    int pval = t_gamma[depth[i]];
+    int lb = pval & 0xff;
+    switch (pval >> 8)
+    {
+    case 0:
+      gl_depth_back[3 * i + 0] = 255;
+      gl_depth_back[3 * i + 1] = 255 - lb;
+      gl_depth_back[3 * i + 2] = 255 - lb;
+      break;
+    case 1:
+      gl_depth_back[3 * i + 0] = 255;
+      gl_depth_back[3 * i + 1] = lb;
+      gl_depth_back[3 * i + 2] = 0;
+      break;
+    case 2:
+      gl_depth_back[3 * i + 0] = 255 - lb;
+      gl_depth_back[3 * i + 1] = 255;
+      gl_depth_back[3 * i + 2] = 0;
+      break;
+    case 3:
+      gl_depth_back[3 * i + 0] = 0;
+      gl_depth_back[3 * i + 1] = 255;
+      gl_depth_back[3 * i + 2] = lb;
+      break;
+    case 4:
+      gl_depth_back[3 * i + 0] = 0;
+      gl_depth_back[3 * i + 1] = 255 - lb;
+      gl_depth_back[3 * i + 2] = 255;
+      break;
+    case 5:
+      gl_depth_back[3 * i + 0] = 0;
+      gl_depth_back[3 * i + 1] = 0;
+      gl_depth_back[3 * i + 2] = 255 - lb;
+      break;
+    default:
+      gl_depth_back[3 * i + 0] = 0;
+      gl_depth_back[3 * i + 1] = 0;
+      gl_depth_back[3 * i + 2] = 0;
+      break;
+    }
+  }
+  got_frames++;
+  pthread_cond_signal (&gl_frame_cond);
+  pthread_mutex_unlock (&gl_backbuf_mutex);
 }
 
-void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
+void
+rgb_cb (freenect_device * dev, freenect_pixel * rgb, uint32_t timestamp)
 {
-	pthread_mutex_lock(&gl_backbuf_mutex);
-	got_frames++;
-	memcpy(gl_rgb_back, rgb, FREENECT_RGB_SIZE);
-	pthread_cond_signal(&gl_frame_cond);
-	pthread_mutex_unlock(&gl_backbuf_mutex);
+  pthread_mutex_lock (&gl_backbuf_mutex);
+  got_frames++;
+  memcpy (gl_rgb_back, rgb, FREENECT_RGB_SIZE);
+  pthread_cond_signal (&gl_frame_cond);
+  pthread_mutex_unlock (&gl_backbuf_mutex);
 }
 
-void *freenect_threadfunc(void *arg)
+void
+ir_cb (freenect_device * dev, freenect_pixel_ir * rgb, uint32_t timestamp)
 {
-	freenect_set_tilt_degs(f_dev,freenect_angle);
-	freenect_set_led(f_dev,LED_RED);
-	freenect_set_depth_callback(f_dev, depth_cb);
-	freenect_set_rgb_callback(f_dev, rgb_cb);
-	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
-	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
+  pthread_mutex_lock (&gl_backbuf_mutex);
+  got_frames++;
 
-	freenect_start_depth(f_dev);
-	freenect_start_rgb(f_dev);
+  int i;
+  for (i = 0; i < FREENECT_FRAME_PIX; i++)
+  {
+    int pval = rgb[i];
+    pval = pval >> 2;
+    int lb = pval & 0xff;
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
+    gl_rgb_back[3 * i + 0] = lb;
+    gl_rgb_back[3 * i + 1] = lb;
+    gl_rgb_back[3 * i + 2] = lb;
 
-	while(!die && freenect_process_events(f_ctx) >= 0 )
-	{
-		freenect_raw_device_state* state;
-		freenect_update_device_state(f_dev);
-		state = freenect_get_device_state(f_dev);
-		double dx,dy,dz;
-		freenect_get_mks_accel(state, &dx, &dy, &dz);
-		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
-		fflush(stdout);
-	}
-
-	printf("\nshutting down streams...\n");
-
-	freenect_stop_depth(f_dev);
-	freenect_stop_rgb(f_dev);
-
-	printf("-- done!\n");
-	return NULL;
+  }
+  pthread_cond_signal (&gl_frame_cond);
+  pthread_mutex_unlock (&gl_backbuf_mutex);
 }
 
-int main(int argc, char **argv)
+void *
+freenect_threadfunc (void *arg)
 {
-	int res;
+  freenect_set_tilt_degs (f_dev, freenect_angle);
+  freenect_set_led (f_dev, LED_RED);
+  freenect_set_depth_callback (f_dev, depth_cb);
+  freenect_set_rgb_callback (f_dev, rgb_cb);
+  freenect_set_ir_callback (f_dev, ir_cb);
+  freenect_set_rgb_format (f_dev, FREENECT_FORMAT_RGB);
+  freenect_set_depth_format (f_dev, FREENECT_FORMAT_11_BIT);
 
-	printf("Kinect camera test\n");
+  freenect_start_depth (f_dev);
+  freenect_start_rgb (f_dev);
 
-	int i;
-	for (i=0; i<2048; i++) {
-		float v = i/2048.0;
-		v = powf(v, 3)* 6;
-		t_gamma[i] = v*6*256;
-	}
+  printf ("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 
-	g_argc = argc;
-	g_argv = argv;
+  while (!die && freenect_process_events (f_ctx) >= 0)
+  {
+    freenect_raw_device_state *state;
+    freenect_update_device_state (f_dev);
+    state = freenect_get_device_state (f_dev);
+    double dx, dy, dz;
+    freenect_get_mks_accel (state, &dx, &dy, &dz);
+    printf ("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x,
+            state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
+    fflush (stdout);
+  }
 
-	if (freenect_init(&f_ctx, NULL) < 0) {
-		printf("freenect_init() failed\n");
-		return 1;
-	}
+  printf ("\nshutting down streams...\n");
 
-	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
+  freenect_stop_depth (f_dev);
+  freenect_stop_rgb (f_dev);
+  freenect_stop_ir (f_dev);
 
-	int nr_devices = freenect_num_devices (f_ctx);
-	printf ("Number of devices found: %d\n", nr_devices);
+  printf ("-- done!\n");
+  return NULL;
+}
 
-	int user_device_number = 0;
-	if (argc > 1)
-		user_device_number = atoi(argv[1]);
+int
+main (int argc, char **argv)
+{
+  int res;
 
-	if (nr_devices < 1)
-		return 1;
+  printf ("Kinect camera test\n");
 
-	if (freenect_open_device(f_ctx, &f_dev, user_device_number) < 0) {
-		printf("Could not open device\n");
-		return 1;
-	}
+  int i;
+  for (i = 0; i < 2048; i++)
+  {
+    float v = i / 2048.0;
+    v = powf (v, 3) * 6;
+    t_gamma[i] = v * 6 * 256;
+  }
 
-	res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
-	if (res) {
-		printf("pthread_create failed\n");
-		return 1;
-	}
+  g_argc = argc;
+  g_argv = argv;
 
-	// OS X requires GLUT to run on the main thread
-	gl_threadfunc(NULL);
+  if (freenect_init (&f_ctx, NULL) < 0)
+  {
+    printf ("freenect_init() failed\n");
+    return 1;
+  }
 
-	return 0;
+  freenect_set_log_level (f_ctx, FREENECT_LOG_DEBUG);
+
+  int nr_devices = freenect_num_devices (f_ctx);
+  printf ("Number of devices found: %d\n", nr_devices);
+
+  int user_device_number = 0;
+  if (argc > 1)
+    user_device_number = atoi (argv[1]);
+
+  if (nr_devices < 1)
+    return 1;
+
+  if (freenect_open_device (f_ctx, &f_dev, user_device_number) < 0)
+  {
+    printf ("Could not open device\n");
+    return 1;
+  }
+
+  res = pthread_create (&freenect_thread, NULL, freenect_threadfunc, NULL);
+  if (res)
+  {
+    printf ("pthread_create failed\n");
+    return 1;
+  }
+
+  // OS X requires GLUT to run on the main thread
+  gl_threadfunc (NULL);
+
+  return 0;
 }
