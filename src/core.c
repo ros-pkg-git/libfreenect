@@ -46,9 +46,9 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 
 /** \brief Shutdown the given Freenect context. */
 int 
-  freenect_shutdown(freenect_context *ctx)
+  freenect_shutdown (freenect_context *ctx)
 {
-  fnusb_shutdown (ctx);
+  fnusb_shutdown (&ctx->usb);
 	return (0);
 }
 
@@ -57,7 +57,11 @@ int freenect_process_events(freenect_context *ctx)
 	return fnusb_process_events(&ctx->usb);
 }
 
-int freenect_num_devices(freenect_context *ctx)
+/** \brief Get the list of devices for the current Freenect context.
+  * The method returns only the devices that satisfy the vendor ID (0x45e) and product ID (0x02ae)
+  */
+int 
+  freenect_num_devices (freenect_context *ctx)
 {
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
@@ -81,33 +85,39 @@ int freenect_num_devices(freenect_context *ctx)
 	return (nr);
 }
 
-int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
+/** \brief Open a device in the current Freenect context using a given index. */
+int 
+  freenect_open_device (freenect_context *ctx, freenect_device **dev, int index)
 {
 	int res;
-	freenect_device *pdev = malloc(sizeof(freenect_device));
+	freenect_device *pdev = malloc (sizeof (freenect_device));
 	if (!pdev)
 		return -1;
 
-	memset(pdev, 0, sizeof(*pdev));
+	memset (pdev, 0, sizeof (*pdev));
 
 	pdev->parent = ctx;
 
-	res = fnusb_open_subdevices(pdev, index);
+	res = fnusb_open_subdevices (pdev, index);
 
-	if (res < 0) {
-		free(pdev);
-		return res;
-	} else {
+	if (res < 0) 
+  {
+		free (pdev);
+		return (res);
+	} 
+  else 
+  {
 		*dev = pdev;
-		return 0;
+		return (0);
 	}
 }
 
-int freenect_close_device(freenect_device *dev)
+/** \brief Close the given device. */
+int 
+  freenect_close_device (freenect_device *dev)
 {
-	freenect_context *ctx = dev->parent;
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
-	return 0;
+  libusb_close (dev->usb_cam.dev);
+	return (0);
 }
 
 void freenect_set_user(freenect_device *dev, void *user)
