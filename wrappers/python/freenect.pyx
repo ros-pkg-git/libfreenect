@@ -23,10 +23,15 @@
 # either License.
 import cython
 
-FORMAT_RGB = 0
-FORMAT_BAYER = 1
-FORMAT_11_BIT = 0
-FORMAT_10_BIT = 1
+VIDEO_RGB = 0
+VIDEO_BAYER = 1
+VIDEO_IR_8BIT = 2
+VIDEO_IR_10BIT = 3
+VIDEO_IR_10BIT_PACKED = 4
+DEPTH_11BIT = 0
+DEPTH_10BIT = 1
+DEPTH_11BIT_PACKED = 2
+DEPTH_10BIT_PACKED = 3
 LED_OFF = 0
 LED_GREEN = 1
 LED_RED = 2
@@ -45,33 +50,33 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
 
 cdef extern from "libfreenect_sync.h":
-    int freenect_sync_get_rgb(char **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
-    int freenect_sync_get_depth(char **depth, unsigned int *timestamp)
+    int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
+    int freenect_sync_get_depth(void **depth, unsigned int *timestamp)
     void freenect_sync_stop()
 
 cdef extern from "libfreenect.h":
     ctypedef void (*freenect_depth_cb)(void *dev, char *depth, int timestamp) # was u_int32
-    ctypedef void (*freenect_rgb_cb)(void *dev, char *rgb, int timestamp) # was u_int32
+    ctypedef void (*freenect_video_cb)(void *dev, char *video, int timestamp) # was u_int32
     int freenect_init(void **ctx, int usb_ctx) # changed from void * as usb_ctx is always NULL
     int freenect_shutdown(void *ctx)
     int freenect_process_events(void *ctx)
     int freenect_num_devices(void *ctx)
     int freenect_open_device(void *ctx, void **dev, int index)
     int freenect_close_device(void *dev)
-    #void freenect_set_user(void *dev, void *user)
-    #void *freenect_get_user(void *dev)
     void freenect_set_depth_callback(void *dev, freenect_depth_cb cb)
-    void freenect_set_rgb_callback(void *dev, freenect_rgb_cb cb)
-    int freenect_set_rgb_format(void *dev, int fmt)
+    void freenect_set_video_callback(void *dev, freenect_video_cb cb)
+    int freenect_set_video_format(void *dev, int fmt)
     int freenect_set_depth_format(void *dev, int fmt)
     int freenect_start_depth(void *dev)
-    int freenect_start_rgb(void *dev)
+    int freenect_start_video(void *dev)
     int freenect_stop_depth(void *dev)
-    int freenect_stop_rgb(void *dev)
+    int freenect_stop_video(void *dev)
     int freenect_set_tilt_degs(void *dev, double angle)
     int freenect_set_led(void *dev, int option)
-    int freenect_get_raw_accel(void *dev, short int* x, short int* y, short int* z) # had to make these short int
-    int freenect_get_mks_accel(void *dev, double* x, double* y, double* z)
+    int freenect_update_tilt_state(void *dev)
+    void* freenect_get_tilt_state(void *dev)
+    void freenect_get_mks_accel(void *state, double* x, double* y, double* z)
+    double freenect_get_tilt_degs(void *state)
 
 
 cdef class DevPtr:
@@ -84,8 +89,13 @@ cdef class CtxPtr:
    def __repr__(self): 
       return "<Ctx Pointer>"
 
-def set_rgb_format(DevPtr dev, int fmt):
-    return freenect_set_rgb_format(dev._ptr, fmt)
+cdef class StatePtr:
+   cdef void* _ptr 
+   def __repr__(self): 
+      return "<State Pointer>"
+
+def set_video_format(DevPtr dev, int fmt):
+    return freenect_set_video_format(dev._ptr, fmt)
 
 def set_depth_format(DevPtr dev, int fmt):
     return freenect_set_depth_format(dev._ptr, fmt)
@@ -93,14 +103,14 @@ def set_depth_format(DevPtr dev, int fmt):
 def start_depth(DevPtr dev):
     return freenect_start_depth(dev._ptr)
 
-def start_rgb(DevPtr dev):
-    return freenect_start_rgb(dev._ptr)
+def start_video(DevPtr dev):
+    return freenect_start_video(dev._ptr)
 
 def stop_depth(DevPtr dev):
     return freenect_stop_depth(dev._ptr)
 
-def stop_rgb(DevPtr dev):
-    return freenect_stop_rgb(dev._ptr)
+def stop_video(DevPtr dev):
+    return freenect_stop_video(dev._ptr)
 
 def shutdown(CtxPtr ctx):
     return freenect_shutdown(ctx._ptr)
@@ -120,6 +130,37 @@ def set_tilt_degs(DevPtr dev, float angle):
 def set_led(DevPtr dev, int option):
     return freenect_set_led(dev._ptr, option)
 
+def update_tilt_state(DevPtr dev):
+    return freenect_update_tilt_state(dev._ptr)
+
+def get_tilt_state(DevPtr dev):
+    cdef void* state = freenect_get_tilt_state(dev._ptr)
+    cdef StatePtr state_out
+    state_out = StatePtr()
+    state_out._ptr = state
+    return state_out
+
+def get_mks_accel(StatePtr state):
+   cdef double x, y, z
+   freenect_get_mks_accel(state._ptr, &x, &y, &z)
+   return x, y, z
+
+def get_accel(DevPtr dev):
+   """MKS Accelerometer helper
+
+   Args:
+       dev:
+
+   Returns:
+       (x, y, z) accelerometer values
+   """
+   update_tilt_state(dev)
+   return get_mks_accel(get_tilt_state(dev))
+   
+
+def get_tilt_degs(StatePtr state):
+   return freenect_get_tilt_degs(state._ptr)
+
 cdef init():
     cdef void* ctx
     if freenect_init(cython.address(ctx), 0) < 0:
@@ -138,7 +179,7 @@ cdef open_device(CtxPtr ctx, int index):
     dev_out._ptr = dev
     return dev_out
 
-_depth_cb, _rgb_cb = None, None
+_depth_cb, _video_cb = None, None
 
 cdef void depth_cb(void *dev, char *data, int timestamp):
     nbytes = 614400  # 480 * 640 * 2
@@ -146,19 +187,23 @@ cdef void depth_cb(void *dev, char *data, int timestamp):
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _depth_cb:
-       _depth_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
+       _depth_cb(*_depth_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
 
-cdef void rgb_cb(void *dev, char *data, int timestamp):
+cdef void video_cb(void *dev, char *data, int timestamp):
     nbytes = 921600  # 480 * 640 * 3
     cdef DevPtr dev_out
     dev_out = DevPtr()
     dev_out._ptr = dev
-    if _rgb_cb:
-       _rgb_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
+    if _video_cb:
+       _video_cb(*_video_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
 
-def runloop(depth=None, rgb=None):
+class Kill(Exception):
+   """This kills the runloop, raise from the body only"""
+
+
+def runloop(depth=None, video=None, body=None):
     """Sets up the kinect and maintains a runloop
 
     This is where most of the action happens.  You can get the dev pointer from the callback
@@ -168,14 +213,15 @@ def runloop(depth=None, rgb=None):
     Args:
         depth: A function that takes (dev, depth, timestamp), corresponding to C function.
             If None (default), then you won't get a callback for depth.
-        rgb: A function that takes (dev, rgb, timestamp), corresponding to C function.
-            If None (default), then you won't get a callback for rgb.
+        video: A function that takes (dev, video, timestamp), corresponding to C function.
+            If None (default), then you won't get a callback for video.
+        body: A function that takes (dev, ctx) and is called in the body of process_events
     """
-    global _depth_cb, _rgb_cb
+    global _depth_cb, _video_cb
     if depth:
        _depth_cb = depth
-    if rgb:
-       _rgb_cb = rgb
+    if video:
+       _video_cb = video
     cdef DevPtr dev
     cdef CtxPtr ctx
     cdef void* devp
@@ -186,12 +232,20 @@ def runloop(depth=None, rgb=None):
     ctxp = ctx._ptr
     freenect_set_depth_format(devp, 0)
     freenect_start_depth(devp)
-    freenect_set_rgb_format(devp, FORMAT_RGB)
-    freenect_start_rgb(devp)
+    freenect_set_video_format(devp, VIDEO_RGB)
+    freenect_start_video(devp)
     freenect_set_depth_callback(devp, depth_cb)
-    freenect_set_rgb_callback(devp, rgb_cb)
-    while freenect_process_events(ctxp) >= 0:
-        pass
+    freenect_set_video_callback(devp, video_cb)
+    try:
+       while freenect_process_events(ctxp) >= 0:
+          if body:
+             body(dev, ctx)
+    except Kill:
+       pass
+    freenect_stop_depth(devp)
+    freenect_stop_video(devp)
+    freenect_close_device(devp)
+    freenect_shutdown(ctxp)
 
 
 def _load_numpy():
@@ -203,7 +257,7 @@ def _load_numpy():
         raise e
 
 
-def depth_cb_np(dev, string, timestamp):
+def _depth_cb_np(dev, string, timestamp):
    """Converts the raw depth data into a numpy array for your function
 
     Args:
@@ -220,12 +274,12 @@ def depth_cb_np(dev, string, timestamp):
    return dev, data, timestamp
 
 
-def rgb_cb_np(dev, string, timestamp):
+def _video_cb_np(dev, string, timestamp):
    """Converts the raw depth data into a numpy array for your function
 
     Args:
         dev: DevPtr object
-        string: A python string with the RGB data
+        string: A python string with the video data
         timestamp: An int representing the time
 
     Returns:
@@ -237,7 +291,7 @@ def rgb_cb_np(dev, string, timestamp):
    return dev, data, timestamp
 
 
-def sync_get_depth():
+def _sync_get_depth_str():
     """Get the next available depth frame from the kinect.
 
     Returns:
@@ -245,17 +299,17 @@ def sync_get_depth():
         depth: A python string for the 16 bit depth image (640*480*2 bytes)
         timestamp: int representing the time
     """
-    cdef char* depth
+    cdef void* depth
     cdef unsigned int timestamp
     out = freenect_sync_get_depth(&depth, &timestamp)
     if out:
         return
-    depth_str = PyString_FromStringAndSize(depth, DEPTH_BYTES)
+    depth_str = PyString_FromStringAndSize(<char *>depth, DEPTH_BYTES)
     free(depth);
     return depth_str, timestamp
 
 
-def sync_get_rgb():
+def _sync_get_rgb_str():
     """Get the next available rgb frame from the kinect.
 
     Returns:
@@ -263,12 +317,12 @@ def sync_get_rgb():
         rgb: A python string for the 8 bit rgb image (640*480*3 bytes)
         timestamp: int representing the time
     """
-    cdef char* rgb
+    cdef void* rgb
     cdef unsigned int timestamp
     out = freenect_sync_get_rgb(&rgb, &timestamp)
     if out:
         return
-    rgb_str = PyString_FromStringAndSize(rgb, RGB_BYTES)
+    rgb_str = PyString_FromStringAndSize(<char *>rgb, RGB_BYTES)
     free(rgb);
     return rgb_str, timestamp
 
@@ -279,7 +333,7 @@ def sync_stop():
     freenect_sync_stop()
 
         
-def sync_get_rgb_np():
+def sync_get_rgb():
     """Get the next available RGB frame from the kinect, as a numpy array.
 
     Returns:
@@ -289,7 +343,7 @@ def sync_get_rgb_np():
     """
     np = _load_numpy()
     try:
-        string, timestamp = sync_get_rgb()
+        string, timestamp = _sync_get_rgb_str()
     except TypeError:
         return
     data = np.fromstring(string, dtype=np.uint8)
@@ -297,7 +351,7 @@ def sync_get_rgb_np():
     return data, timestamp
 
 
-def sync_get_depth_np():
+def sync_get_depth():
     """Get the next available depth frame from the kinect, as a numpy array.
 
     Returns:
@@ -307,9 +361,10 @@ def sync_get_depth_np():
     """
     np = _load_numpy()
     try:
-        string, timestamp = sync_get_depth()
+        string, timestamp = _sync_get_depth_str()
     except TypeError:
         return
     data = np.fromstring(string, dtype=np.uint16)
     data.resize((480, 640))
     return data, timestamp
+
